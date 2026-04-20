@@ -20,7 +20,9 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             correlation_id = f"req-{uuid.uuid4().hex[:8]}"
         
         # TODO: Bind the correlation_id to structlog contextvars
-        bind_contextvars(correlation_id=correlation_id)
+        route = request.url.path
+        method = request.method
+        bind_contextvars(correlation_id=correlation_id, route=route, method=method)
         request.state.correlation_id = correlation_id
         
         start = time.perf_counter()

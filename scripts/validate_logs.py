@@ -29,8 +29,10 @@ def main() -> None:
     missing_enrichment = 0
     missing_required_details = []
     missing_enrichment_details = []
+    missing_route_details = []
     pii_hits = []
     correlation_ids = set()
+    routes = set()
 
     for idx, rec in enumerate(records, start=1):
         # Check required fields (global)
@@ -49,6 +51,8 @@ def main() -> None:
             if missing_context:
                 missing_enrichment += 1
                 missing_enrichment_details.append((idx, rec.get("event", "unknown"), sorted(missing_context)))
+            if not rec.get("route"):
+                missing_route_details.append((idx, rec.get("event", "unknown")))
 
         # Check PII (naive check for @ or common test credit card)
         raw = json.dumps(rec)
@@ -59,6 +63,9 @@ def main() -> None:
         cid = rec.get("correlation_id")
         if cid and cid != "MISSING":
             correlation_ids.add(cid)
+        route = rec.get("route")
+        if route:
+            routes.add(route)
 
     print("--- Lab Verification Results ---")
     print(f"Total log records analyzed: {total}")
@@ -69,6 +76,9 @@ def main() -> None:
     if missing_enrichment_details:
         print(f"  First missing enrichment examples: {missing_enrichment_details[:5]}")
     print(f"Unique correlation IDs found: {len(correlation_ids)}")
+    print(f"Routes found: {sorted(routes)}")
+    if missing_route_details:
+        print(f"  API records missing route: {missing_route_details[:5]}")
     print(f"Potential PII leaks detected: {len(pii_hits)}")
     if pii_hits:
         print(f"  Events with leaks: {set(pii_hits)}")
