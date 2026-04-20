@@ -27,21 +27,28 @@ def main() -> None:
     total = len(records)
     missing_required = 0
     missing_enrichment = 0
+    missing_required_details = []
+    missing_enrichment_details = []
     pii_hits = []
     correlation_ids = set()
 
-    for rec in records:
+    for idx, rec in enumerate(records, start=1):
         # Check required fields (global)
-        if not {"ts", "level", "event"}.issubset(rec.keys()):
+        missing = REQUIRED_FIELDS - set(rec.keys())
+        if missing:
             missing_required += 1
+            missing_required_details.append((idx, rec.get("event", "unknown"), sorted(missing)))
             
         # Context-specific checks for API requests
         if rec.get("service") == "api":
-            if "correlation_id" not in rec or rec.get("correlation_id") == "MISSING":
+            if rec.get("correlation_id") == "MISSING":
                 missing_required += 1
+                missing_required_details.append((idx, rec.get("event", "unknown"), ["correlation_id=MISSING"]))
             
-            if not ENRICHMENT_FIELDS.issubset(rec.keys()):
+            missing_context = ENRICHMENT_FIELDS - set(rec.keys())
+            if missing_context:
                 missing_enrichment += 1
+                missing_enrichment_details.append((idx, rec.get("event", "unknown"), sorted(missing_context)))
 
         # Check PII (naive check for @ or common test credit card)
         raw = json.dumps(rec)
@@ -56,7 +63,11 @@ def main() -> None:
     print("--- Lab Verification Results ---")
     print(f"Total log records analyzed: {total}")
     print(f"Records with missing required fields: {missing_required}")
+    if missing_required_details:
+        print(f"  First missing required examples: {missing_required_details[:5]}")
     print(f"Records with missing enrichment (context): {missing_enrichment}")
+    if missing_enrichment_details:
+        print(f"  First missing enrichment examples: {missing_enrichment_details[:5]}")
     print(f"Unique correlation IDs found: {len(correlation_ids)}")
     print(f"Potential PII leaks detected: {len(pii_hits)}")
     if pii_hits:
