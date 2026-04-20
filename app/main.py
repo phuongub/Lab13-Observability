@@ -16,13 +16,14 @@ from .metrics import record_error, snapshot
 from .middleware import CorrelationIdMiddleware
 from .pii import hash_user_id, summarize_text
 from .schemas import ChatRequest, ChatResponse
-from .tracing import tracing_enabled, init_tracing, langfuse_span, update_current_span
-
+from .tracing import init_tracing, tracing_enabled
 
 configure_logging()
 log = get_logger()
+
 app = FastAPI(title="Day 13 Observability Lab")
 app.add_middleware(CorrelationIdMiddleware)
+
 agent = LabAgent()
 
 
@@ -78,6 +79,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         service="api",
         payload={"message_preview": summarize_text(body.message)},
     )
+
     try:
         result = agent.run(
             user_id=body.user_id,
@@ -85,6 +87,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             session_id=body.session_id,
             message=body.message,
         )
+
         log.info(
             "response_sent",
             service="api",
@@ -94,6 +97,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             cost_usd=result.cost_usd,
             payload={"answer_preview": summarize_text(result.answer)},
         )
+
         return ChatResponse(
             answer=result.answer,
             correlation_id=request.state.correlation_id,
@@ -103,14 +107,18 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             cost_usd=result.cost_usd,
             quality_score=result.quality_score,
         )
-    except Exception as exc:  # pragma: no cover
+
+    except Exception as exc:
         error_type = type(exc).__name__
         record_error(error_type)
-        log.error(
+        log.exception(
             "request_failed",
             service="api",
             error_type=error_type,
-            payload={"detail": str(exc), "message_preview": summarize_text(body.message)},
+            payload={
+                "detail": str(exc),
+                "message_preview": summarize_text(body.message),
+            },
         )
         raise HTTPException(status_code=500, detail=error_type) from exc
 

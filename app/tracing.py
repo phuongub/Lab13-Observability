@@ -1,95 +1,121 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from contextlib import contextmanager
 from typing import Any, Generator
 
 import structlog
 from structlog.contextvars import get_contextvars
-from langfuse import get_client
-from langfuse import Langfuse
-# from langfuse.decorators import observe, langfuse_context
+from langfuse import Langfuse, propagate_attributes
 
-try:
-    from langfuse import Langfuse
-    from langfuse.decorators import observe, langfuse_context
-except Exception:  # pragma: no cover
-    def observe(*args: Any, **kwargs: Any):
-        def decorator(func):
-            return func
-        return decorator
-
-    class _DummyContext:
-        def update_current_trace(self, **kwargs: Any) -> None:
-            return None
-
-        def update_current_observation(self, **kwargs: Any) -> None:
-            return None
-
-    langfuse_context = _DummyContext()
-    Langfuse = None  # type: ignore
-
-
-# Initialize Langfuse client
-def _init_langfuse() -> Langfuse | None:
-    """Initialize Langfuse client if credentials are available."""
-    if not tracing_enabled():
-        return None
-    try:
-        return Langfuse(
-            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-            host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
-        )
-    except Exception:
-        return None
-
+logger = structlog.get_logger("trace")
 
 langfuse_client: Langfuse | None = None
 
+# Simple detector rules aligned with validate_logs.py behavior
+EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+\.\w+")
+LONG_DIGITS_RE = re.compile(r"\b\d{13,19}\b")
+
 
 def tracing_enabled() -> bool:
-    return bool(os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"))
+    return bool(
+        os.getenv("LANGFUSE_PUBLIC_KEY")
+        and os.getenv("LANGFUSE_SECRET_KEY")
+        and os.getenv("LANGFUSE_BASE_URL")
+    )
 
 
 def init_tracing() -> None:
-    """Initialize Langfuse tracing at application startup."""
     global langfuse_client
 
+    if not tracing_enabled():
+        logger.warning(
+            "langfuse_disabled",
+            reason="missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY or LANGFUSE_BASE_URL",
+        )
+        langfuse_client = None
+        return
+
     try:
-        langfuse_client = get_client()
-        is_ready = langfuse_client.auth_check()
+        langfuse_client = Langfuse(
+            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+            host=os.getenv("LANGFUSE_BASE_URL"),
+            debug=os.getenv("LANGFUSE_DEBUG", "false").lower() == "true",
+        )
 
         logger.info(
             "langfuse_initialized",
-            status="enabled" if is_ready else "disabled"
+            status="enabled",
+            host=os.getenv("LANGFUSE_BASE_URL"),
         )
-
-    except Exception as e:
+    except Exception as exc:
         logger.error(
             "langfuse_init_failed",
-            error=str(e)
+            error=str(exc),
         )
         langfuse_client = None
 
 
 def get_langfuse_client() -> Langfuse | None:
-    """Get the initialized Langfuse client."""
     return langfuse_client
 
 
-
-logger = structlog.get_logger("trace")
+def current_trace_id() -> str:
+    context = get_contextvars()
+    return context.get("correlation_id", "unknown")
 
 
 def _new_span_id() -> str:
     return f"span-{uuid.uuid4().hex[:8]}"
 
 
-def current_trace_id() -> str:
-    context = get_contextvars()
-    return context.get("correlation_id", "unknown")
+def _redact_string(value: str) -> str:
+    value = EMAIL_RE.sub("[REDACTED_EMAIL]", value)
+    value = LONG_DIGITS_RE.sub("[REDACTED_NUMBER]", value)
+    return value
+
+
+def _scrub_for_logs(value: Any) -> Any:
+    """Recursively scrub likely-PII from structured logs."""
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        return _redact_string(value)
+
+    if isinstance(value, dict):
+        scrubbed: dict[str, Any] = {}
+        for k, v in value.items():
+            key = str(k).lower()
+
+            # Aggressive protection for common sensitive keys
+            if key in {
+                "message",
+                "prompt",
+                "input",
+                "answer",
+                "response",
+                "context",
+                "email",
+                "phone",
+                "card",
+                "credit_card",
+                "account_number",
+                "bank_account",
+                "customer_email",
+            }:
+                scrubbed[k] = "[REDACTED]"
+            else:
+                scrubbed[k] = _scrub_for_logs(v)
+        return scrubbed
+
+    if isinstance(value, (list, tuple, set)):
+        return [_scrub_for_logs(v) for v in value]
+
+    return value
 
 
 def start_span(
@@ -108,7 +134,7 @@ def start_span(
         parent_span_id=parent_span_id,
         service=service,
         trace_event=event,
-        **kwargs,
+        **_scrub_for_logs(kwargs),
     )
     return span_id
 
@@ -129,7 +155,7 @@ def end_span(
         parent_span_id=parent_span_id,
         service=service,
         trace_event=event,
-        **kwargs,
+        **_scrub_for_logs(kwargs),
     )
 
 
@@ -149,12 +175,13 @@ def trace_log(
         parent_span_id=parent_span_id,
         service=service,
         trace_event=event,
-        **kwargs,
+        **_scrub_for_logs(kwargs),
     )
 
 
 @contextmanager
-def langfuse_span(
+def langfuse_root_span(
+    *,
     name: str,
     input: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
@@ -162,115 +189,30 @@ def langfuse_span(
     user_id: str | None = None,
     tags: list[str] | None = None,
 ) -> Generator[Any, None, None]:
-    """Context manager for creating Langfuse spans with structured tracing.
-    
-    Best practice: Use this for automatic span lifecycle management with proper
-    error handling and input/output tracking.
-    
-    Example:
-        with langfuse_span("llm_call", input={"prompt": "..."}) as span:
-            result = llm.generate(prompt)
-            span.update(output=result)
-    """
-    if not langfuse_client:
+    client = get_langfuse_client()
+    if not client:
         yield None
         return
-    
-    try:
-        trace_id = current_trace_id()
-        span = langfuse_client.span(
-            name=name,
-            input=input,
-            metadata=metadata or {},
-            session_id=session_id,
+
+    # Keep Langfuse metadata lightweight and non-sensitive
+    meta = _scrub_for_logs({
+        "correlation_id": current_trace_id(),
+        **(metadata or {}),
+    })
+
+    safe_input = _scrub_for_logs(input) if input is not None else None
+
+    with client.start_as_current_observation(
+        as_type="span",
+        name=name,
+        input=safe_input,
+        metadata=meta,
+    ) as root_span:
+        with propagate_attributes(
+            trace_name=name,
             user_id=user_id,
-            tags=tags or [],
-            trace_id=trace_id,
-        )
-        yield span
-        span.end()
-    except Exception as e:
-        logger.error("langfuse_span_error", name=name, error=str(e))
-        yield None
-
-
-@contextmanager
-def langfuse_trace(
-    name: str,
-    input: dict[str, Any] | None = None,
-    metadata: dict[str, Any] | None = None,
-    session_id: str | None = None,
-    user_id: str | None = None,
-    tags: list[str] | None = None,
-) -> Generator[Any, None, None]:
-    """Context manager for creating root-level Langfuse traces.
-    
-    Best practice: Use for top-level operations like API requests or agent runs.
-    """
-    if not langfuse_client:
-        yield None
-        return
-    
-    try:
-        trace = langfuse_client.trace(
-            name=name,
-            input=input,
-            metadata=metadata or {},
             session_id=session_id,
-            user_id=user_id,
             tags=tags or [],
-        )
-        yield trace
-        trace.end()
-    except Exception as e:
-        logger.error("langfuse_trace_error", name=name, error=str(e))
-        yield None
-
-
-def update_current_span(
-    input: dict[str, Any] | None = None,
-    output: dict[str, Any] | None = None,
-    metadata: dict[str, Any] | None = None,
-    status: str | None = None,
-    level: str | None = None,
-    cost_usd: float | None = None,
-    latency_ms: float | None = None,
-    **kwargs: Any,
-) -> None:
-    """Update the current observation with structured data.
-    
-    Best practice: Call this to record completion details and metrics.
-    """
-    if not langfuse_client:
-        return
-    
-    try:
-        updates = {}
-        if input is not None:
-            updates["input"] = input
-        if output is not None:
-            updates["output"] = output
-        if metadata is not None:
-            updates["metadata"] = metadata
-        if status is not None:
-            updates["status"] = status
-        if level is not None:
-            updates["level"] = level
-        if cost_usd is not None:
-            # Record cost as metadata to avoid overwriting usage
-            if "metadata" not in updates:
-                updates["metadata"] = {}
-            updates["metadata"]["cost_usd"] = cost_usd
-        if latency_ms is not None:
-            if "metadata" not in updates:
-                updates["metadata"] = {}
-            updates["metadata"]["latency_ms"] = latency_ms
-        
-        for key, value in kwargs.items():
-            if "metadata" not in updates:
-                updates["metadata"] = {}
-            updates["metadata"][key] = value
-        
-        langfuse_context.update_current_observation(**updates)
-    except Exception as e:
-        logger.error("update_span_error", error=str(e))
+            metadata=meta,
+        ):
+            yield root_span
