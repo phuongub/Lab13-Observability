@@ -3,21 +3,21 @@
 > **Instruction**: Fill in all sections below. This report is designed to be parsed by an automated grading assistant. Ensure all tags (e.g., `[GROUP_NAME]`) are preserved.
 
 ## 1. Team Metadata
-- [GROUP_NAME]: 
-- [REPO_URL]: 
+- [GROUP_NAME]: C401 - B4
+- [REPO_URL]: `https://github.com/phuongub/Lab13-Observability.git`
 - [MEMBERS]:
-  - Member A: [Name] | Role: Logging & PII
-  - Member B: [Name] | Role: Tracing & Enrichment
-  - Member C: [Name] | Role: SLO & Alerts
-  - Member D: [Name] | Role: Load Test & Dashboard
-  - Member E: [Name] | Role: Demo & Report
+  - Member A: Phạm Nguyễn Tiến Mạnh | Role: Logging & PII
+  - Member B: Trịnh Uyên Chi | Role: Tracing & Enrichment
+  - Member C: Nguyễn Hoàng Nghĩa | Role: SLO & Alerts
+  - Member D: Trần Việt Phương | Role: Load Test & Incident Injection
+  - Member E: Nguyễn Thị Thùy Trang | Role: Dashboard & Demo & Report
 
 ---
 
 ## 2. Group Performance (Auto-Verified)
 - [VALIDATE_LOGS_FINAL_SCORE]: /100
 - [TOTAL_TRACES_COUNT]: 
-- [PII_LEAKS_FOUND]: 
+- [PII_LEAKS_FOUND]:   
 
 ---
 

@@ -263,7 +263,7 @@ with col2:
     st.subheader("Traffic (requests/min)")
 
     traffic = last_1h.set_index("ts").resample("1min").size().rename("requests")
-    st.metric("Total Requests (1h)", int(len(last_1h)))
+    st.metric("Total Requests (1h)", int(len(df)))
     st.bar_chart(traffic)
 
 # ===== Hàng 2 =====

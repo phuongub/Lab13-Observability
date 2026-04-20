@@ -1,12 +1,12 @@
-{"user_id": "khach001", "feature": "qa", "session_id": "sess_001", "message": "Shop ơi mình cao 1m6 nặng 50kg thì mặc size gì ạ?"}
-{"user_id": "khach002", "feature": "qa", "session_id": "sess_002", "message": "Áo này là form ôm hay form oversize rộng rãi vậy shop?"}
-{"user_id": "khach003", "feature": "policy", "session_id": "sess_003", "message": "Nếu mặc không vừa hoặc hàng bị rách chỉ thì có được đổi trả không?"}
-{"user_id": "khach004", "feature": "policy", "session_id": "sess_004", "message": "Bên mình hoàn tiền qua tài khoản ngân hàng trong bao lâu vậy?"}
-{"user_id": "khach005", "feature": "shipping", "session_id": "sess_005", "message": "Phí ship về quận 1 HCM là bao nhiêu ạ?"}
-{"user_id": "khach006", "feature": "shipping", "session_id": "sess_006", "message": "Mình mua tổng cộng 550k thì có được freeship không shop?"}
-{"user_id": "khach007", "feature": "shipping", "session_id": "sess_007", "message": "Mình đang cần gấp để đi tiệc, shop có giao hỏa tốc liền được không?"}
-{"user_id": "khach008", "feature": "style", "session_id": "sess_008", "message": "Chân váy chữ A bên shop thì phối đồ với áo gì cho trẻ trung năng động?"}
-{"user_id": "khach009", "feature": "style", "session_id": "sess_009", "message": "Áo thun y2k này phối sao cho xịn xò shop tư vấn mình với."}
-{"user_id": "khach010", "feature": "material", "session_id": "sess_010", "message": "Vải áo nỉ lót bông này đem giặt máy có sợ bị xù lông với nhão form không?"}
-{"user_id": "khach011", "feature": "qa", "session_id": "sess_011", "message": "Ngoài quần áo ra thì shop có bán giày sneaker hay bốt da không vậy?"}
-{"user_id": "khach012", "feature": "qa", "session_id": "sess_012", "message": "Shop ở đâu vậy, mình ghé mua trực tiếp được không?"}
+{"user_id": "khach001", "session_id": "sess_001", "feature": "qa", "message": "Shop ơi mình cao 1m6 nặng 50kg thì mặc size gì ạ?"}
+{"user_id": "khach002", "session_id": "sess_002", "feature": "qa", "message": "Áo này là form ôm hay form oversize rộng rãi vậy shop?"}
+{"user_id": "khach003", "session_id": "sess_003", "feature": "policy", "message": "Nếu mặc không vừa hoặc hàng bị rách chỉ thì có được đổi trả không?"}
+{"user_id": "khach004", "session_id": "sess_004", "feature": "policy", "message": "Bên mình hoàn tiền qua tài khoản ngân hàng trong bao lâu vậy?"}
+{"user_id": "khach005", "session_id": "sess_005", "feature": "shipping", "message": "Phí ship về quận 1 HCM là bao nhiêu ạ?"}
+{"user_id": "khach006", "session_id": "sess_006", "feature": "shipping", "message": "Mình mua tổng cộng 550k thì có được freeship không shop?"}
+{"user_id": "khach007", "session_id": "sess_007", "feature": "shipping", "message": "Mình đang cần gấp để đi tiệc, shop có giao hỏa tốc liền được không?"}
+{"user_id": "khach008", "session_id": "sess_008", "feature": "style", "message": "Chân váy chữ A bên shop thì phối đồ với áo gì cho trẻ trung năng động?"}
+{"user_id": "khach009", "session_id": "sess_009", "feature": "style", "message": "Áo thun y2k này phối sao cho xịn xò shop tư vấn mình với."}
+{"user_id": "khach010", "session_id": "sess_010", "feature": "material", "message": "Vải áo nỉ lót bông này đem giặt máy có sợ bị xù lông với nhão form không?"}
+{"user_id": "khach011", "session_id": "sess_011", "feature": "qa", "message": "Ngoài quần áo ra thì shop có bán giày sneaker hay bốt da không vậy?"}
+{"user_id": "khach012", "session_id": "sess_012", "feature": "qa", "message": "Shop ở đâu vậy, mình ghé mua trực tiếp được không?"}
