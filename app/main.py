@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 import os
 
 from fastapi import FastAPI, HTTPException, Request
@@ -13,7 +16,8 @@ from .metrics import record_error, snapshot
 from .middleware import CorrelationIdMiddleware
 from .pii import hash_user_id, summarize_text
 from .schemas import ChatRequest, ChatResponse
-from .tracing import tracing_enabled
+from .tracing import tracing_enabled, init_tracing, langfuse_span, update_current_span
+
 
 configure_logging()
 log = get_logger()
@@ -24,6 +28,7 @@ agent = LabAgent()
 
 @app.on_event("startup")
 async def startup() -> None:
+    init_tracing()
     log.info(
         "app_started",
         service=os.getenv("APP_NAME", "day13-observability-lab"),
@@ -57,7 +62,6 @@ async def metrics() -> dict:
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
-    # TODO: Enrich logs with request context (user_id_hash, session_id, feature, model, env)
     env = os.getenv("APP_ENV", "dev")
     model = os.getenv("LLM_MODEL", "claude-sonnet-4-5")
 
@@ -66,9 +70,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         session_id=body.session_id,
         feature=body.feature,
         model=model,
-        env=env
+        env=env,
     )
-    
+
     log.info(
         "request_received",
         service="api",

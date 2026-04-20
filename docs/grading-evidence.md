@@ -1,7 +1,7 @@
 # Evidence Collection Sheet
 
 ## Required screenshots
-- Langfuse trace list with >= 10 traces
+- Langfuse trace list with >= 10 traces 
 - One full trace waterfall
 - JSON logs showing correlation_id
 - Log line with PII redaction

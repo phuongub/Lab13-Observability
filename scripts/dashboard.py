@@ -69,9 +69,6 @@ def load_alert_rules() -> dict:
     except Exception:
         return default_rules
 
-    # Hỗ trợ 2 kiểu phổ biến:
-    # 1) top-level keys: latency_p95_ms/error_rate_percent/...
-    # 2) {alerts: { ... }}
     if "alerts" in loaded and isinstance(loaded["alerts"], dict):
         loaded = loaded["alerts"]
 
@@ -101,7 +98,26 @@ def ensure_columns(df: pd.DataFrame) -> pd.DataFrame:
         "quality_score": 0.0,
     }
 
+    text_defaults = {
+        "route": "unknown",
+        "service": "-",
+        "event": "-",
+        "feature": "-",
+        "method": "-",
+        "model": "-",
+        "session_id": "-",
+        "trace_id": "-",
+        "span_id": "-",
+        "parent_span_id": "-",
+        "correlation_id": "-",
+        "level": "-",
+    }
+
     for col, default in numeric_defaults.items():
+        if col not in df.columns:
+            df[col] = default
+
+    for col, default in text_defaults.items():
         if col not in df.columns:
             df[col] = default
 
@@ -112,11 +128,11 @@ def ensure_columns(df: pd.DataFrame) -> pd.DataFrame:
     df["tokens_out"] = pd.to_numeric(df["tokens_out"], errors="coerce").fillna(0).astype(int)
     df["quality_score"] = pd.to_numeric(df["quality_score"], errors="coerce").fillna(0.0)
 
-    if "route" not in df.columns:
-        df["route"] = "unknown"
-    else:
-        df["route"] = df["route"].fillna("unknown").astype(str).str.strip()
-        df.loc[df["route"] == "", "route"] = "unknown"
+    for col, default in text_defaults.items():
+        df[col] = df[col].fillna(default).astype(str).str.strip()
+        df.loc[df[col] == "", col] = default
+
+    df.loc[df["trace_id"] == "-", "trace_id"] = df.loc[df["trace_id"] == "-", "correlation_id"]
 
     return df
 
@@ -137,6 +153,16 @@ def show_alert(metric_value: float, threshold: float, severity: str, ok_text: st
             st.info(bad_text)
     else:
         st.success(ok_text)
+
+
+def build_trace_timeline(trace_df: pd.DataFrame) -> list[str]:
+    lines = []
+    for _, row in trace_df.iterrows():
+        ts_text = row["ts"].strftime("%H:%M:%S") if pd.notna(row["ts"]) else "-"
+        lines.append(
+            f"{ts_text} | trace_id={row['trace_id']} | span={row['span_id']} | parent={row['parent_span_id']} | service={row['service']} | event={row['event']}"
+        )
+    return lines
 
 
 df = load_logs()
@@ -167,7 +193,6 @@ LATENCY_SLO_MS = float(alert_rules["latency_p95_ms"]["threshold"])
 ERROR_SLO_PERCENT = float(alert_rules["error_rate_percent"]["threshold"])
 BAD_QUALITY_SLO_PERCENT = float(alert_rules["bad_quality_rate_percent"]["threshold"])
 
-# Header stats
 col_a, col_b, col_c = st.columns(3)
 
 with col_a:
@@ -203,7 +228,6 @@ with col_c:
         unsafe_allow_html=True,
     )
 
-# Derived metrics
 p50 = safe_percentile(last_1h["latency_ms"], 50)
 p95 = safe_percentile(last_1h["latency_ms"], 95)
 p99 = safe_percentile(last_1h["latency_ms"], 99)
@@ -214,7 +238,6 @@ avg_quality = float(last_1h["quality_score"].mean()) if len(last_1h) else 0.0
 bad_quality_rate = float((last_1h["quality_score"] <= 0).mean() * 100) if len(last_1h) else 0.0
 total_cost = float(last_1h["cost_usd"].sum())
 
-# Alerts block
 st.subheader("Alerts")
 alert_cols = st.columns(3)
 
@@ -245,7 +268,6 @@ with alert_cols[2]:
         bad_text=f"{alert_rules['bad_quality_rate_percent'].get('message', 'Quality degraded')}: bad quality rate = {bad_quality_rate:.2f}% > {BAD_QUALITY_SLO_PERCENT:.2f}%",
     )
 
-# ===== Hàng 1 =====
 col1, col2 = st.columns(2)
 
 with col1:
@@ -261,31 +283,29 @@ with col1:
 
 with col2:
     st.subheader("Traffic (requests/min)")
-
+    st.metric("Total Requests", int(len(df)))
     traffic = last_1h.set_index("ts").resample("1min").size().rename("requests")
-    st.metric("Total Requests (1h)", int(len(df)))
     st.bar_chart(traffic)
 
-# ===== Hàng 2 =====
 col3, col4 = st.columns(2)
 
 with col3:
     st.subheader("Error Rate with Breakdown")
-
     st.metric("Error Rate", f"{error_rate:.2f}%")
-
     status_counts = last_1h["status_code"].value_counts().sort_index()
     st.bar_chart(status_counts)
 
 with col4:
     st.subheader("Cost over Time")
-
-    st.metric("Total Cost (1h)", f"${total_cost:.4f}")
-
     cost_ts = last_1h.set_index("ts")["cost_usd"].resample("1min").sum().fillna(0)
+    max_cost = float(cost_ts.max()) if not cost_ts.empty else 0.0
+
+    m1, m2 = st.columns(2)
+    m1.metric("Total Cost (1h)", f"${total_cost:.4f}")
+    m2.metric("Max Cost / min", f"${max_cost:.4f}")
+
     st.line_chart(cost_ts)
 
-# ===== Hàng 3 =====
 col5, col6 = st.columns(2)
 
 with col5:
@@ -316,7 +336,6 @@ with col6:
     quality_ts = last_1h.set_index("ts")["quality_score"].resample("1min").mean().fillna(0)
     st.line_chart(quality_ts)
 
-# ===== Route Breakdown =====
 st.subheader("Route Breakdown")
 route_counts = (
     last_1h["route"]
@@ -327,11 +346,77 @@ route_counts = (
 )
 st.bar_chart(route_counts)
 
-# ===== Raw logs =====
-st.subheader("Raw Logs (last 50 rows)")
+st.subheader("Trace Logs")
+
+trace_source = last_1h.copy()
+trace_source = trace_source[trace_source["trace_id"] != "-"].copy()
+
+if trace_source.empty:
+    st.info("Chưa có trace log hợp lệ.")
+else:
+    trace_ids = sorted(trace_source["trace_id"].drop_duplicates().tolist(), reverse=True)
+
+    selected_trace_id = st.selectbox(
+        "Chọn trace_id để xem trace",
+        options=trace_ids,
+        index=0,
+    )
+
+    selected_trace = (
+        trace_source[trace_source["trace_id"] == selected_trace_id]
+        .sort_values(["ts", "service", "event"], ascending=True)
+        .copy()
+    )
+
+    trace_first_ts = selected_trace["ts"].min()
+    trace_last_ts = selected_trace["ts"].max()
+    trace_duration_ms = (
+        (trace_last_ts - trace_first_ts).total_seconds() * 1000
+        if pd.notna(trace_first_ts) and pd.notna(trace_last_ts)
+        else 0
+    )
+
+    tc1, tc2, tc3 = st.columns(3)
+    tc1.metric("Trace ID", selected_trace_id)
+    tc2.metric("Spans / Logs", len(selected_trace))
+    tc3.metric("Trace Window", f"{trace_duration_ms:.1f} ms")
+
+    st.markdown("**Trace Timeline**")
+    st.code("\n".join(build_trace_timeline(selected_trace)), language="text")
+
+    trace_columns = [
+        col for col in [
+            "ts",
+            "trace_id",
+            "span_id",
+            "parent_span_id",
+            "service",
+            "event",
+            "method",
+            "route",
+            "feature",
+            "model",
+            "session_id",
+            "correlation_id",
+            "status_code",
+            "latency_ms",
+            "tokens_in",
+            "tokens_out",
+            "cost_usd",
+            "quality_score",
+            "payload",
+            "level",
+        ]
+        if col in selected_trace.columns
+    ]
+
+    st.markdown("**Trace Detail**")
+    st.dataframe(selected_trace[trace_columns], use_container_width=True)
+
+st.subheader("Raw Logs")
 display_df = (
     last_1h.sort_values("ts", ascending=False)
-    .head(50)
+    .head(200)
     .copy()
 )
 st.dataframe(display_df, use_container_width=True)
