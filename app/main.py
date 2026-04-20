@@ -34,12 +34,25 @@ async def startup() -> None:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"ok": True, "tracing_enabled": tracing_enabled(), "incidents": status()}
+    incidents = status()
+    trace_status = tracing_enabled()
+    log.info(
+        "health_checked",
+        service="api",
+        payload={"ok": True, "tracing_enabled": trace_status, "incidents": incidents},
+    )
+    return {"ok": True, "tracing_enabled": trace_status, "incidents": incidents}
 
 
 @app.get("/metrics")
 async def metrics() -> dict:
-    return snapshot()
+    metrics_snapshot = snapshot()
+    log.info(
+        "metrics_snapshot_requested",
+        service="api",
+        payload={"metric_names": list(metrics_snapshot.keys())},
+    )
+    return metrics_snapshot
 
 
 @app.post("/chat", response_model=ChatResponse)

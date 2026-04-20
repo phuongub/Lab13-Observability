@@ -13,6 +13,7 @@ from .pii import scrub_text
 
 LOG_PATH = Path(os.getenv("LOG_PATH", "data/logs.jsonl"))
 API_ENRICHMENT_FIELDS = ("user_id_hash", "session_id", "feature", "model")
+API_REQUEST_FIELDS = ("route", "method", "status_code")
 
 
 class JsonlFileProcessor:
@@ -51,7 +52,7 @@ def normalize_event(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, An
         event_dict["correlation_id"] = f"req-{uuid.uuid4().hex[:8]}"
 
     if event_dict.get("service") == "api":
-        for field in API_ENRICHMENT_FIELDS:
+        for field in API_ENRICHMENT_FIELDS + API_REQUEST_FIELDS:
             event_dict.setdefault(field, None)
 
     return event_dict
