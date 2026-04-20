@@ -4,6 +4,9 @@ STATE = {
     "rag_slow": False,
     "tool_fail": False,
     "cost_spike": False,
+    "error_rate": False,
+    "hallucination_spike": False,
+    "downtime": False,
 }
 
 

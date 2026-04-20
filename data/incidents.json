@@ -1,5 +1,8 @@
 {
-  "rag_slow": "Retrieval latency spike. Students should find slow RAG span in trace.",
-  "tool_fail": "Vector store or tool error. Students should identify error_type from logs.",
-  "cost_spike": "Token usage spike. Students should explain higher output token cost."
+  "rag_slow": "Retrieval latency spike exceeding P95 > 5s threshold (P2 Warning → Slack). Students should find slow RAG span in Langfuse trace, correlate with latency metric spike, and investigate trace flow.",
+  "tool_fail": "Tool call failure rate exceeds 10% sustained for 15 min (P2 Warning → Slack). Students should identify error_type in error logs, correlate with tool_call_failure metric spike, and check tool provider status.",
+  "cost_spike": "Token usage spike exceeding hourly budget threshold ($50 = budget × 2, P2 Warning → Email; or daily budget P1 Critical → Email+SMS). Students should explain output token count via /metrics and Langfuse token breakdown.",
+  "error_rate": "Request error rate exceeds 5% sustained for 5 min (P1 Critical → Slack + PagerDuty). Students should identify error sources in logs, find correlation IDs for failed requests, and suggest rollback/remediation.",
+  "hallucination_spike": "Model output quality degrades beyond baseline +2σ (P2 Warning → Slack). Students should review outputs in Langfuse traces, identify patterns of degradation, and correlate with feature/model changes.",
+  "downtime": "Service availability drops below 99% over 1 hour (P1 Critical → PagerDuty). Students should detect uptime metric drop, trigger incident response workflow, and correlate with infrastructure/dependency failures."
 }
